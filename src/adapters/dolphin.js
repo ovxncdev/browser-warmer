@@ -239,7 +239,7 @@ export class DolphinAdapter extends EventEmitter {
       );
     }
     
-    this.wsEndpoint = automation.wsEndpoint;
+    this.wsEndpoint = `ws://127.0.0.1:${automation.port}${automation.wsEndpoint}`;
     
     log.info('Profile started', { 
       profileId, 
@@ -248,11 +248,12 @@ export class DolphinAdapter extends EventEmitter {
     });
     
     // Connect to the browser
-    await this._connectToBrowser(this.wsEndpoint);
+    const fullWsEndpoint = `ws://127.0.0.1:${automation.port}${automation.wsEndpoint}`;
+    await this._connectToBrowser(fullWsEndpoint);
     
     return {
       profileId,
-      wsEndpoint: this.wsEndpoint,
+      wsEndpoint: fullWsEndpoint,
       port: automation.port,
     };
   }
