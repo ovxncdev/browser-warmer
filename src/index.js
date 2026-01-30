@@ -12,7 +12,7 @@ import { Sites } from './utils/sites.js';
 import { createSession, SessionState } from './core/session.js';
 import { createWebSocketHandler } from './handlers/websocket.js';
 import { UI, Color, Spinner, ProgressBar, Symbols } from './ui/components.js';
-import { Prompt } from './ui/prompts.js';
+import { Prompt } from './ui/prompts-simple.js';
 import { 
   createDolphinSession, 
   scanForDolphinProfiles, 
