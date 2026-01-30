@@ -13,6 +13,12 @@ import { createSession, SessionState } from './core/session.js';
 import { createWebSocketHandler } from './handlers/websocket.js';
 import { UI, Color, Spinner, ProgressBar, Symbols } from './ui/components.js';
 import { Prompt } from './ui/prompts.js';
+import { 
+  createDolphinSession, 
+  scanForDolphinProfiles, 
+  findDolphinEndpoint 
+} from './adapters/dolphin-session.js';
+import { createDolphinAdapter } from './adapters/dolphin.js';
 
 const VERSION = '2.0.0';
 
@@ -606,6 +612,283 @@ program
   .option('-s, --sites <path>', 'Path to sites config file')
   .option('-v, --verbose', 'Show sites in each category')
   .action(listCategories);
+
+// ============================================================================
+// Dolphin Anty Commands
+// ============================================================================
+
+// Dolphin scan command
+program
+  .command('dolphin:scan')
+  .description('Scan for running Dolphin Anty profiles')
+  .option('--start-port <port>', 'Start port for scanning', parseInt, 9222)
+  .option('--end-port <port>', 'End port for scanning', parseInt, 9322)
+  .option('--host <host>', 'Host to scan', '127.0.0.1')
+  .action(async (options) => {
+    showBanner();
+    
+    console.log(Color.bold(' Scanning for Dolphin Anty profiles...'));
+    console.log(UI.line('─', 50));
+    console.log();
+    
+    const spinner = new Spinner().start('Scanning ports...');
+    
+    try {
+      const profiles = await scanForDolphinProfiles(
+        options.startPort,
+        options.endPort,
+        options.host
+      );
+      
+      spinner.stop();
+      
+      if (profiles.length === 0) {
+        console.log(Color.yellow(`${Symbols.warning} No running profiles found`));
+        console.log(Color.dim('  Make sure Dolphin Anty profiles are running'));
+        console.log();
+        return;
+      }
+      
+      console.log(Color.green(`${Symbols.success} Found ${profiles.length} running profile(s):`));
+      console.log();
+      
+      for (const profile of profiles) {
+        console.log(`  ${Color.cyan(Symbols.pointer)} Port ${Color.bold(profile.port)}`);
+        console.log(`    ${Color.dim('Browser:')} ${profile.browser}`);
+        console.log(`    ${Color.dim('Connect:')} browser-warmer dolphin:run --port ${profile.port}`);
+        console.log();
+      }
+      
+    } catch (error) {
+      spinner.fail('Scan failed');
+      console.log(Color.red(`Error: ${error.message}`));
+    }
+  });
+
+// Dolphin list profiles command
+program
+  .command('dolphin:profiles')
+  .description('List Dolphin Anty profiles via API')
+  .option('--api-port <port>', 'Dolphin API port', parseInt, 3001)
+  .option('--api-host <host>', 'Dolphin API host', 'localhost')
+  .action(async (options) => {
+    showBanner();
+    
+    console.log(Color.bold(' Dolphin Anty Profiles'));
+    console.log(UI.line('─', 50));
+    console.log();
+    
+    const spinner = new Spinner().start('Fetching profiles from Dolphin API...');
+    
+    try {
+      const adapter = createDolphinAdapter({
+        apiPort: options.apiPort,
+        apiHost: options.apiHost,
+      });
+      
+      const profiles = await adapter.listProfiles();
+      
+      spinner.stop();
+      
+      if (profiles.length === 0) {
+        console.log(Color.yellow(`${Symbols.warning} No profiles found`));
+        return;
+      }
+      
+      console.log(Color.green(`${Symbols.success} Found ${profiles.length} profile(s):`));
+      console.log();
+      
+      for (const profile of profiles) {
+        const statusColor = profile.status === 'running' ? 'green' : 'dim';
+        console.log(`  ${Color.cyan(Symbols.pointer)} ${Color.bold(profile.name)} ${Color[statusColor](`(${profile.status || 'stopped'})`)}`);
+        console.log(`    ${Color.dim('ID:')} ${profile.id}`);
+        console.log(`    ${Color.dim('Run:')} browser-warmer dolphin:run --profile-id ${profile.id}`);
+        console.log();
+      }
+      
+    } catch (error) {
+      spinner.fail('Failed to fetch profiles');
+      console.log(Color.red(`Error: ${error.message}`));
+      console.log();
+      console.log(Color.dim('Make sure Dolphin Anty is running and the API is enabled.'));
+    }
+  });
+
+// Dolphin run command
+program
+  .command('dolphin:run')
+  .description('Run browser warming on a Dolphin Anty profile')
+  .option('--profile-id <id>', 'Dolphin profile ID (launches via API)')
+  .option('--port <port>', 'Debug port of running profile', parseInt)
+  .option('--ws <url>', 'WebSocket endpoint URL directly')
+  .option('--api-port <port>', 'Dolphin API port', parseInt, 3001)
+  .option('--api-host <host>', 'Dolphin API host', 'localhost')
+  .option('-c, --config <path>', 'Path to config file')
+  .option('-s, --sites <path>', 'Path to sites config file')
+  .option('--categories <list>', 'Site categories (comma-separated)', 'all')
+  .option('--max-sites <n>', 'Maximum sites to visit', parseInt, 0)
+  .option('--searches <n>', 'Number of searches', parseInt, 3)
+  .option('--no-searches', 'Disable searches')
+  .option('--stop-profile', 'Stop Dolphin profile when done (only with --profile-id)')
+  .option('-y, --yes', 'Skip confirmation')
+  .action(async (options) => {
+    showBanner();
+    
+    // Validate options
+    if (!options.profileId && !options.port && !options.ws) {
+      console.log(Color.red(`${Symbols.error} Must provide one of: --profile-id, --port, or --ws`));
+      console.log();
+      console.log(Color.bold('Examples:'));
+      console.log(Color.dim('  # Connect via debug port (from running profile)'));
+      console.log('  browser-warmer dolphin:run --port 9222');
+      console.log();
+      console.log(Color.dim('  # Start profile via Dolphin API'));
+      console.log('  browser-warmer dolphin:run --profile-id abc123def456');
+      console.log();
+      console.log(Color.dim('  # Direct WebSocket connection'));
+      console.log('  browser-warmer dolphin:run --ws ws://127.0.0.1:9222/devtools/browser/...');
+      console.log();
+      console.log(Color.dim('  # Find profiles first'));
+      console.log('  browser-warmer dolphin:scan');
+      console.log('  browser-warmer dolphin:profiles');
+      console.log();
+      process.exit(1);
+    }
+    
+    // Show connection method
+    console.log(Color.bold(' Dolphin Anty Connection'));
+    console.log(UI.line('─', 50));
+    
+    const connInfo = [];
+    if (options.profileId) {
+      connInfo.push(['Method', 'API (will launch profile)']);
+      connInfo.push(['Profile ID', options.profileId]);
+      connInfo.push(['API', `${options.apiHost}:${options.apiPort}`]);
+    } else if (options.port) {
+      connInfo.push(['Method', 'Debug Port']);
+      connInfo.push(['Port', options.port]);
+    } else if (options.ws) {
+      connInfo.push(['Method', 'WebSocket URL']);
+      connInfo.push(['URL', options.ws.substring(0, 50) + '...']);
+    }
+    console.log(UI.keyValue(connInfo, { indent: 1 }));
+    console.log();
+    
+    // Load config
+    const overrides = {
+      sites: {
+        categories: options.categories.split(',').map(s => s.trim()),
+        maxSites: options.maxSites,
+      },
+      behavior: {
+        searches: options.searches !== false,
+        searchCount: typeof options.searches === 'number' ? options.searches : 3,
+      },
+    };
+    
+    await Config.load({ configPath: options.config, overrides });
+    await Sites.load(options.sites);
+    
+    // Show session config
+    const config = Config.get();
+    const sites = Sites.getSites(config.sites.categories, { maxSites: config.sites.maxSites, shuffle: false });
+    
+    console.log(Color.bold(' Session Configuration'));
+    console.log(UI.line('─', 50));
+    
+    const summary = [
+      ['Sites', `${sites.length} sites`],
+      ['Categories', config.sites.categories.join(', ')],
+      ['Searches', config.behavior.searches ? config.behavior.searchCount : 'Disabled'],
+    ];
+    console.log(UI.keyValue(summary, { indent: 1 }));
+    console.log();
+    
+    // Confirm
+    if (!options.yes) {
+      const confirm = await Prompt.confirm({ message: 'Start warming session?', default: true });
+      if (!confirm) {
+        console.log(Color.yellow('Cancelled.'));
+        process.exit(0);
+      }
+    }
+    
+    console.log();
+    
+    // Create Dolphin session
+    const session = createDolphinSession({
+      profileId: options.profileId,
+      port: options.port,
+      wsEndpoint: options.ws,
+      apiPort: options.apiPort,
+      apiHost: options.apiHost,
+      sitesConfig: options.sites,
+    });
+    
+    // Progress tracking
+    let progressBar = null;
+    
+    session.on('initialized', () => {
+      console.log(Color.green(`${Symbols.success} Connected to Dolphin profile`));
+      console.log();
+    });
+    
+    session.on('started', ({ siteCount }) => {
+      console.log(Color.bold(' Progress'));
+      console.log(UI.line('─', 50));
+      progressBar = new ProgressBar({ total: siteCount, width: 40 });
+      progressBar.start();
+    });
+    
+    session.on('siteStart', ({ url, current }) => {
+      const shortUrl = url.length > 40 ? url.substring(0, 37) + '...' : url;
+      progressBar?.update(current - 1, shortUrl);
+    });
+    
+    session.on('siteComplete', ({ current }) => {
+      progressBar?.update(current);
+    });
+    
+    session.on('error', (error) => {
+      progressBar?.stop();
+      console.log();
+      console.log(Color.red(`${Symbols.error} Error: ${error.message}`));
+    });
+    
+    session.on('completed', (stats) => {
+      progressBar?.complete('Session complete!');
+      showStats(stats);
+    });
+    
+    session.on('stopped', (stats) => {
+      progressBar?.stop('Session stopped');
+      showStats(stats);
+    });
+    
+    // Handle Ctrl+C
+    let stopping = false;
+    process.on('SIGINT', async () => {
+      if (stopping) {
+        console.log('\nForce exit...');
+        process.exit(1);
+      }
+      stopping = true;
+      console.log('\n\nStopping session...');
+      await session.stop(options.stopProfile);
+      process.exit(0);
+    });
+    
+    // Run
+    try {
+      await session.initialize();
+      await session.start();
+    } catch (error) {
+      log.error('Session failed', { error: error.message });
+      process.exit(1);
+    } finally {
+      await session.stop(options.stopProfile);
+    }
+  });
 
 // Parse and run
 program.parse();
