@@ -20,7 +20,7 @@ const DOLPHIN_ENDPOINTS = {
   // Local API (Dolphin Anty must be running)
   baseUrl: 'http://localhost:3001',
   
-  // Endpoints
+  // Endpoints  
   profiles: '/v1.0/browser_profiles',
   start: '/v1.0/browser_profiles/{id}/start',
   stop: '/v1.0/browser_profiles/{id}/stop',
@@ -28,6 +28,16 @@ const DOLPHIN_ENDPOINTS = {
   // Automation API (different port)
   automationPort: 3001,
 };
+
+// Token can be set via environment variable or passed directly
+let globalToken = process.env.DOLPHIN_TOKEN || null;
+
+/**
+ * Set the API token globally
+ */
+export function setDolphinToken(token) {
+  globalToken = token;
+}
 
 /**
  * Dolphin Anty Connection Options
@@ -50,6 +60,7 @@ export class DolphinAdapter extends EventEmitter {
       apiHost: options.apiHost || 'localhost',
       connectionType: options.connectionType || DolphinConnectionType.API,
       timeout: options.timeout || 30000,
+      token: options.token || globalToken || null,
       ...options,
     };
     
@@ -58,6 +69,13 @@ export class DolphinAdapter extends EventEmitter {
     this.profileId = null;
     this.wsEndpoint = null;
     this._isConnected = false;
+  }
+
+  /**
+   * Set API token
+   */
+  setToken(token) {
+    this.options.token = token;
   }
 
   /**
@@ -76,11 +94,18 @@ export class DolphinAdapter extends EventEmitter {
     log.debug('Dolphin API request', { method, url });
     
     try {
+      const headers = {
+        'Content-Type': 'application/json',
+      };
+      
+      // Add authorization token if available
+      if (this.options.token) {
+        headers['Authorization'] = `Bearer ${this.options.token}`;
+      }
+      
       const options = {
         method,
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers,
       };
       
       if (body) {
