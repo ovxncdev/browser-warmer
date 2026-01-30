@@ -67,6 +67,7 @@ export class DolphinSessionManager extends EventEmitter {
       this.adapter = createDolphinAdapter({
         apiPort: this.options.apiPort || 3001,
         apiHost: this.options.apiHost || 'localhost',
+        token: this.options.token || process.env.DOLPHIN_TOKEN,
       });
       
       // Connect based on provided options
