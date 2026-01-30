@@ -1,0 +1,318 @@
+# Browser Warmer - Sites Configuration
+# This file defines the sites, categories, and search terms for browser warming
+
+# Site categories - each category contains a list of URLs
+categories:
+  news:
+    - https://www.cnn.com
+    - https://www.bbc.com
+    - https://www.reuters.com
+    - https://www.nytimes.com
+    - https://www.theguardian.com
+    - https://news.ycombinator.com
+    - https://www.npr.org
+    - https://www.washingtonpost.com
+    - https://www.usatoday.com
+    - https://apnews.com
+
+  shopping:
+    - https://www.amazon.com
+    - https://www.ebay.com
+    - https://www.walmart.com
+    - https://www.target.com
+    - https://www.bestbuy.com
+    - https://www.etsy.com
+    - https://www.wayfair.com
+    - https://www.costco.com
+    - https://www.homedepot.com
+    - https://www.lowes.com
+
+  entertainment:
+    - https://www.youtube.com
+    - https://www.netflix.com
+    - https://www.spotify.com
+    - https://www.imdb.com
+    - https://www.twitch.tv
+    - https://www.rottentomatoes.com
+    - https://www.hulu.com
+    - https://www.disneyplus.com
+    - https://www.pandora.com
+    - https://soundcloud.com
+
+  social:
+    - https://www.reddit.com
+    - https://www.quora.com
+    - https://medium.com
+    - https://www.pinterest.com
+    - https://www.linkedin.com
+    - https://www.tumblr.com
+    - https://www.discord.com
+    - https://www.snapchat.com
+    - https://www.tiktok.com
+    - https://mastodon.social
+
+  tech:
+    - https://github.com
+    - https://stackoverflow.com
+    - https://www.techcrunch.com
+    - https://www.wired.com
+    - https://arstechnica.com
+    - https://www.theverge.com
+    - https://www.engadget.com
+    - https://www.cnet.com
+    - https://slashdot.org
+    - https://dev.to
+
+  utilities:
+    - https://www.google.com
+    - https://www.weather.com
+    - https://maps.google.com
+    - https://translate.google.com
+    - https://www.speedtest.net
+    - https://www.wolframalpha.com
+    - https://www.calculator.net
+    - https://www.timeanddate.com
+    - https://www.convertunits.com
+    - https://www.online-stopwatch.com
+
+  reference:
+    - https://www.wikipedia.org
+    - https://www.dictionary.com
+    - https://www.britannica.com
+    - https://www.merriam-webster.com
+    - https://www.thesaurus.com
+    - https://www.investopedia.com
+    - https://www.webmd.com
+    - https://www.mayoclinic.org
+    - https://www.healthline.com
+    - https://www.nih.gov
+
+  finance:
+    - https://www.bloomberg.com
+    - https://www.cnbc.com
+    - https://finance.yahoo.com
+    - https://www.marketwatch.com
+    - https://www.fool.com
+    - https://www.bankrate.com
+    - https://www.nerdwallet.com
+    - https://www.creditkarma.com
+    - https://www.mint.com
+    - https://www.tradingview.com
+
+  travel:
+    - https://www.booking.com
+    - https://www.expedia.com
+    - https://www.tripadvisor.com
+    - https://www.airbnb.com
+    - https://www.kayak.com
+    - https://www.hotels.com
+    - https://www.priceline.com
+    - https://www.skyscanner.com
+    - https://www.lonelyplanet.com
+    - https://www.viator.com
+
+  food:
+    - https://www.allrecipes.com
+    - https://www.foodnetwork.com
+    - https://www.epicurious.com
+    - https://www.seriouseats.com
+    - https://www.bonappetit.com
+    - https://www.delish.com
+    - https://www.tasty.co
+    - https://www.simplyrecipes.com
+    - https://www.doordash.com
+    - https://www.ubereats.com
+
+  sports:
+    - https://www.espn.com
+    - https://www.nfl.com
+    - https://www.nba.com
+    - https://www.mlb.com
+    - https://www.nhl.com
+    - https://www.cbssports.com
+    - https://www.foxsports.com
+    - https://bleacherreport.com
+    - https://www.theatletic.com
+    - https://www.sportingnews.com
+
+  education:
+    - https://www.coursera.org
+    - https://www.udemy.com
+    - https://www.khanacademy.org
+    - https://www.edx.org
+    - https://www.skillshare.com
+    - https://www.codecademy.com
+    - https://www.duolingo.com
+    - https://www.brilliant.org
+    - https://www.masterclass.com
+    - https://www.lynda.com
+
+  gaming:
+    - https://store.steampowered.com
+    - https://www.ign.com
+    - https://www.gamespot.com
+    - https://www.polygon.com
+    - https://kotaku.com
+    - https://www.pcgamer.com
+    - https://www.gamesradar.com
+    - https://www.eurogamer.net
+    - https://www.nintendo.com
+    - https://www.playstation.com
+
+  misc:
+    - https://www.yelp.com
+    - https://www.craigslist.org
+    - https://www.zillow.com
+    - https://www.realtor.com
+    - https://www.indeed.com
+    - https://www.glassdoor.com
+    - https://www.meetup.com
+    - https://www.eventbrite.com
+    - https://www.nextdoor.com
+    - https://www.patreon.com
+
+# Search engines with their query URL patterns
+searchEngines:
+  google:
+    url: https://www.google.com/search?q=
+    weight: 70
+  bing:
+    url: https://www.bing.com/search?q=
+    weight: 15
+  duckduckgo:
+    url: https://duckduckgo.com/?q=
+    weight: 10
+  yahoo:
+    url: https://search.yahoo.com/search?p=
+    weight: 5
+
+# Search terms organized by topic for natural-looking searches
+searchTerms:
+  general:
+    - best restaurants near me
+    - weather this week
+    - news today
+    - what time is it
+    - how to cook pasta
+    - movie reviews
+    - tech news today
+    - travel destinations 2024
+    - workout routines
+    - book recommendations
+    - home improvement tips
+    - healthy recipes
+    - budget smartphones
+    - learn programming
+    - photography tips
+    - gardening basics
+    - coffee brewing methods
+    - best headphones 2024
+    - how to save money
+    - diy projects
+
+  questions:
+    - how does wifi work
+    - why is the sky blue
+    - what is machine learning
+    - how to start a business
+    - what is cryptocurrency
+    - how to improve credit score
+    - why do cats purr
+    - what causes climate change
+    - how to meditate
+    - what is quantum computing
+
+  shopping:
+    - best laptop under 1000
+    - running shoes reviews
+    - wireless earbuds comparison
+    - kitchen appliances deals
+    - furniture stores near me
+    - gift ideas for mom
+    - best vacuum cleaner
+    - mattress reviews
+    - smart home devices
+    - outdoor furniture sale
+
+  entertainment:
+    - movies coming out this month
+    - top netflix shows
+    - best podcasts 2024
+    - new music releases
+    - video game reviews
+    - concert tickets near me
+    - streaming service comparison
+    - best books to read
+    - comedy shows near me
+    - art exhibitions
+
+  local:
+    - coffee shops near me
+    - gas stations nearby
+    - grocery stores open now
+    - pharmacies near me
+    - banks near me
+    - car repair shops
+    - dry cleaners nearby
+    - pet stores near me
+    - gyms near me
+    - dentist near me
+
+  howto:
+    - how to tie a tie
+    - how to make sourdough bread
+    - how to change a tire
+    - how to do taxes
+    - how to write a resume
+    - how to lose weight
+    - how to sleep better
+    - how to negotiate salary
+    - how to fix a leaky faucet
+    - how to grow tomatoes
+
+# URL patterns to avoid (regex patterns)
+excludePatterns:
+  - ".*\\.pdf$"
+  - ".*\\.zip$"
+  - ".*\\.exe$"
+  - ".*download.*"
+  - ".*login.*"
+  - ".*signin.*"
+  - ".*signup.*"
+  - ".*register.*"
+  - ".*checkout.*"
+  - ".*payment.*"
+  - ".*account.*"
+
+# Content type hints for URLs (affects timing behavior)
+contentTypeHints:
+  video:
+    - youtube.com
+    - vimeo.com
+    - twitch.tv
+    - netflix.com
+    - hulu.com
+    - disneyplus.com
+  social:
+    - reddit.com
+    - twitter.com
+    - facebook.com
+    - instagram.com
+    - linkedin.com
+    - tiktok.com
+  shopping:
+    - amazon.com
+    - ebay.com
+    - walmart.com
+    - target.com
+    - etsy.com
+  news:
+    - cnn.com
+    - bbc.com
+    - nytimes.com
+    - reuters.com
+    - theguardian.com
+  search:
+    - google.com/search
+    - bing.com/search
+    - duckduckgo.com
