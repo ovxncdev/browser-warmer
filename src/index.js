@@ -640,11 +640,12 @@ program
     console.log();
     
     // Step 2: Fetch profiles
-    const spinner = new Spinner().start('Fetching your profiles...');
+    let spinner = new Spinner().start('Fetching your profiles...');
     
     let profiles;
+    let adapter;
     try {
-      const adapter = createDolphinAdapter({ token });
+      adapter = createDolphinAdapter({ token });
       profiles = await adapter.listProfiles();
       spinner.success(`Found ${profiles.length} profile(s)`);
     } catch (error) {
@@ -658,46 +659,92 @@ program
       return;
     }
     
-    console.log();
-    
-    // Step 3: Select profile
-    const profileChoices = profiles.map(p => ({
-      name: `${p.name} (ID: ${p.id})`,
-      value: p.id,
-    }));
-    
-    const selectedProfileId = await Prompt.select({
-      message: 'Select a profile to warm',
-      choices: profileChoices,
-    });
-    
-    const selectedProfile = profiles.find(p => p.id === selectedProfileId);
-    console.log();
-    console.log(Color.green(`${Symbols.success} Selected: ${selectedProfile.name}`));
-    console.log();
-    
-    // Step 4: Connection method
-    const connectionMethod = await Prompt.select({
-      message: 'How do you want to connect?',
-      choices: [
-        { name: 'Auto-launch via API (requires paid plan)', value: 'api' },
-        { name: 'Connect to running profile (manual start)', value: 'manual' },
-      ],
-    });
-    
-    let port = null;
-    if (connectionMethod === 'manual') {
-      console.log();
-      console.log(Color.yellow('Start the profile manually in Dolphin Anty first.'));
-      console.log(Color.dim('Look for the debug port in the profile details.'));
-      console.log();
+    // Step 2b: Scan for running profiles
+    spinner = new Spinner().start('Scanning for running profiles...');
+    let runningProfiles = [];
+    try {
+      runningProfiles = await scanForDolphinProfiles(9200, 9400);
+      spinner.stop();
       
-      port = await Prompt.number({
-        message: 'Enter the debug port',
-        default: 9222,
-        min: 1000,
-        max: 65535,
+      if (runningProfiles.length > 0) {
+        console.log(Color.green(`${Symbols.success} Found ${runningProfiles.length} running browser(s) on ports: ${runningProfiles.map(p => p.port).join(', ')}`));
+      } else {
+        console.log(Color.dim('  No running profiles detected (ports 9200-9400)'));
+      }
+    } catch (e) {
+      spinner.stop();
+    }
+    
+    console.log();
+    
+    // Step 3: Select profile or running browser
+    const choices = [];
+    
+    // Add running profiles first
+    if (runningProfiles.length > 0) {
+      choices.push({ name: Color.green('── Running Browsers ──'), value: null, disabled: true });
+      for (const rp of runningProfiles) {
+        choices.push({
+          name: `${Color.green('●')} Port ${rp.port} - ${rp.browser || 'Browser'} ${Color.green('(RUNNING)')}`,
+          value: `port:${rp.port}`,
+        });
+      }
+      choices.push({ name: '', value: null, disabled: true });
+    }
+    
+    // Add all profiles
+    choices.push({ name: Color.cyan('── All Profiles ──'), value: null, disabled: true });
+    for (const p of profiles) {
+      choices.push({
+        name: `${p.name} (ID: ${p.id})`,
+        value: `id:${p.id}`,
       });
+    }
+    
+    const selection = await Prompt.select({
+      message: 'Select a profile or running browser',
+      choices: choices.filter(c => !c.disabled),
+    });
+    
+    let selectedProfileId = null;
+    let selectedPort = null;
+    let connectionMethod = null;
+    
+    if (selection.startsWith('port:')) {
+      selectedPort = parseInt(selection.split(':')[1]);
+      connectionMethod = 'manual';
+      console.log();
+      console.log(Color.green(`${Symbols.success} Will connect to running browser on port ${selectedPort}`));
+    } else if (selection.startsWith('id:')) {
+      selectedProfileId = parseInt(selection.split(':')[1]);
+      const selectedProfile = profiles.find(p => p.id === selectedProfileId);
+      console.log();
+      console.log(Color.green(`${Symbols.success} Selected: ${selectedProfile.name}`));
+      
+      // Step 4: Connection method (only if profile selected)
+      console.log();
+      connectionMethod = await Prompt.select({
+        message: 'How do you want to connect?',
+        choices: [
+          { name: 'Auto-launch via API (requires paid plan)', value: 'api' },
+          { name: 'Connect to running profile (enter port manually)', value: 'manual' },
+        ],
+      });
+      
+      if (connectionMethod === 'manual') {
+        console.log();
+        console.log(Color.yellow('Start this profile manually in Dolphin Anty first.'));
+        console.log(Color.dim('Look for the debug port in the profile row or details.'));
+        console.log();
+        
+        selectedPort = await Prompt.number({
+          message: 'Enter the debug port',
+          default: 9222,
+          min: 1000,
+          max: 65535,
+        });
+        selectedProfileId = null; // Clear since we're using port
+      }
     }
     
     console.log();
@@ -751,10 +798,10 @@ program
     
     const sites = Sites.getSites(sessionConfig.categories, { maxSites: sessionConfig.maxSites, shuffle: false });
     
+    const selectedProfile = profiles.find(p => p.id === selectedProfileId);
     const summary = [
-      ['Profile', selectedProfile.name],
-      ['Profile ID', selectedProfileId],
-      ['Connection', connectionMethod === 'api' ? 'Auto-launch' : `Manual (port ${port})`],
+      ['Profile', selectedProfile?.name || 'N/A'],
+      ['Connection', selectedPort ? `Port ${selectedPort}` : 'Auto-launch via API'],
       ['Sites', `${sites.length} sites`],
       ['Searches', sessionConfig.searches ? sessionConfig.searchCount : 'Disabled'],
     ];
@@ -789,8 +836,8 @@ program
     
     // Create session
     const session = createDolphinSession({
-      profileId: connectionMethod === 'api' ? selectedProfileId : null,
-      port: connectionMethod === 'manual' ? port : null,
+      profileId: selectedProfileId,
+      port: selectedPort,
       token: token,
     });
     
@@ -860,7 +907,7 @@ program
         console.log(Color.yellow('Try the manual connection method instead:'));
         console.log(Color.dim('  1. Start the profile manually in Dolphin Anty'));
         console.log(Color.dim('  2. Run: node src/index.js dolphin'));
-        console.log(Color.dim('  3. Choose "Connect to running profile"'));
+        console.log(Color.dim('  3. Select the running browser from the list'));
       }
       
       process.exit(1);
