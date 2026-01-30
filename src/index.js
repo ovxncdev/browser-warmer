@@ -671,6 +671,7 @@ program
   .description('List Dolphin Anty profiles via API')
   .option('--api-port <port>', 'Dolphin API port', parseInt, 3001)
   .option('--api-host <host>', 'Dolphin API host', 'localhost')
+  .option('--token <token>', 'Dolphin API token (or set DOLPHIN_TOKEN env var)')
   .action(async (options) => {
     showBanner();
     
@@ -678,12 +679,29 @@ program
     console.log(UI.line('─', 50));
     console.log();
     
+    const token = options.token || process.env.DOLPHIN_TOKEN;
+    if (!token) {
+      console.log(Color.red(`${Symbols.error} API token required`));
+      console.log();
+      console.log(Color.dim('Get your token from: https://dolphin-anty.com/panel/#/api'));
+      console.log();
+      console.log('Usage:');
+      console.log(Color.cyan('  node src/index.js dolphin:profiles --token YOUR_TOKEN'));
+      console.log();
+      console.log('Or set environment variable:');
+      console.log(Color.cyan('  set DOLPHIN_TOKEN=your_token_here'));
+      console.log(Color.cyan('  node src/index.js dolphin:profiles'));
+      console.log();
+      return;
+    }
+    
     const spinner = new Spinner().start('Fetching profiles from Dolphin API...');
     
     try {
       const adapter = createDolphinAdapter({
         apiPort: options.apiPort,
         apiHost: options.apiHost,
+        token: token,
       });
       
       const profiles = await adapter.listProfiles();
@@ -702,7 +720,7 @@ program
         const statusColor = profile.status === 'running' ? 'green' : 'dim';
         console.log(`  ${Color.cyan(Symbols.pointer)} ${Color.bold(profile.name)} ${Color[statusColor](`(${profile.status || 'stopped'})`)}`);
         console.log(`    ${Color.dim('ID:')} ${profile.id}`);
-        console.log(`    ${Color.dim('Run:')} browser-warmer dolphin:run --profile-id ${profile.id}`);
+        console.log(`    ${Color.dim('Run:')} browser-warmer dolphin:run --profile-id ${profile.id} --token <token>`);
         console.log();
       }
       
@@ -710,7 +728,7 @@ program
       spinner.fail('Failed to fetch profiles');
       console.log(Color.red(`Error: ${error.message}`));
       console.log();
-      console.log(Color.dim('Make sure Dolphin Anty is running and the API is enabled.'));
+      console.log(Color.dim('Make sure Dolphin Anty is running and your token is valid.'));
     }
   });
 
@@ -721,6 +739,7 @@ program
   .option('--profile-id <id>', 'Dolphin profile ID (launches via API)')
   .option('--port <port>', 'Debug port of running profile', parseInt)
   .option('--ws <url>', 'WebSocket endpoint URL directly')
+  .option('--token <token>', 'Dolphin API token (or set DOLPHIN_TOKEN env var)')
   .option('--api-port <port>', 'Dolphin API port', parseInt, 3001)
   .option('--api-host <host>', 'Dolphin API host', 'localhost')
   .option('-c, --config <path>', 'Path to config file')
@@ -734,6 +753,8 @@ program
   .action(async (options) => {
     showBanner();
     
+    const token = options.token || process.env.DOLPHIN_TOKEN;
+    
     // Validate options
     if (!options.profileId && !options.port && !options.ws) {
       console.log(Color.red(`${Symbols.error} Must provide one of: --profile-id, --port, or --ws`));
@@ -743,14 +764,25 @@ program
       console.log('  browser-warmer dolphin:run --port 9222');
       console.log();
       console.log(Color.dim('  # Start profile via Dolphin API'));
-      console.log('  browser-warmer dolphin:run --profile-id abc123def456');
+      console.log('  browser-warmer dolphin:run --profile-id abc123def456 --token YOUR_TOKEN');
       console.log();
       console.log(Color.dim('  # Direct WebSocket connection'));
       console.log('  browser-warmer dolphin:run --ws ws://127.0.0.1:9222/devtools/browser/...');
       console.log();
       console.log(Color.dim('  # Find profiles first'));
-      console.log('  browser-warmer dolphin:scan');
-      console.log('  browser-warmer dolphin:profiles');
+      console.log('  browser-warmer dolphin:profiles --token YOUR_TOKEN');
+      console.log();
+      process.exit(1);
+    }
+    
+    // Token required for profile-id method
+    if (options.profileId && !token) {
+      console.log(Color.red(`${Symbols.error} API token required when using --profile-id`));
+      console.log();
+      console.log(Color.dim('Get your token from: https://dolphin-anty.com/panel/#/api'));
+      console.log();
+      console.log('Usage:');
+      console.log(Color.cyan(`  node src/index.js dolphin:run --profile-id ${options.profileId} --token YOUR_TOKEN`));
       console.log();
       process.exit(1);
     }
@@ -822,6 +854,7 @@ program
       wsEndpoint: options.ws,
       apiPort: options.apiPort,
       apiHost: options.apiHost,
+      token: token,
       sitesConfig: options.sites,
     });
     
