@@ -17,16 +17,18 @@ puppeteer.use(StealthPlugin());
  * Dolphin Anty API endpoints
  */
 const DOLPHIN_ENDPOINTS = {
-  // Local API (Dolphin Anty must be running)
-  baseUrl: 'http://localhost:3001',
+  // Cloud API (for listing profiles, managing data)
+  cloudUrl: 'https://dolphin-anty-api.com',
   
-  // Endpoints  
-  profiles: '/v1.0/browser_profiles',
+  // Local API (for starting/stopping profiles - Dolphin Anty must be running)
+  localUrl: 'http://localhost:3001',
+  
+  // Endpoints (cloud)
+  profiles: '/browser_profiles',
+  
+  // Endpoints (local)  
   start: '/v1.0/browser_profiles/{id}/start',
   stop: '/v1.0/browser_profiles/{id}/stop',
-  
-  // Automation API (different port)
-  automationPort: 3001,
 };
 
 // Token can be set via environment variable or passed directly
@@ -79,26 +81,32 @@ export class DolphinAdapter extends EventEmitter {
   }
 
   /**
-   * Get base API URL
+   * Get local API URL
    */
-  get apiUrl() {
+  get localApiUrl() {
     return `http://${this.options.apiHost}:${this.options.apiPort}`;
   }
 
   /**
-   * Make API request to Dolphin
+   * Get cloud API URL  
    */
-  async _apiRequest(endpoint, method = 'GET', body = null) {
-    const url = `${this.apiUrl}${endpoint}`;
+  get cloudApiUrl() {
+    return DOLPHIN_ENDPOINTS.cloudUrl;
+  }
+
+  /**
+   * Make API request to Dolphin Cloud API
+   */
+  async _cloudApiRequest(endpoint, method = 'GET', body = null) {
+    const url = `${this.cloudApiUrl}${endpoint}`;
     
-    log.debug('Dolphin API request', { method, url });
+    log.debug('Dolphin Cloud API request', { method, url });
     
     try {
       const headers = {
         'Content-Type': 'application/json',
       };
       
-      // Add authorization token if available
       if (this.options.token) {
         headers['Authorization'] = `Bearer ${this.options.token}`;
       }
@@ -123,9 +131,48 @@ export class DolphinAdapter extends EventEmitter {
       
     } catch (error) {
       if (error.code === 'ECONNREFUSED') {
+        throw new Error(`Cannot connect to Dolphin Cloud API at ${url}.`);
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Make API request to Dolphin Local API
+   */
+  async _localApiRequest(endpoint, method = 'GET', body = null) {
+    const url = `${this.localApiUrl}${endpoint}`;
+    
+    log.debug('Dolphin Local API request', { method, url });
+    
+    try {
+      const headers = {
+        'Content-Type': 'application/json',
+      };
+      
+      const options = {
+        method,
+        headers,
+      };
+      
+      if (body) {
+        options.body = JSON.stringify(body);
+      }
+      
+      const response = await fetch(url, options);
+      const data = await response.json();
+      
+      if (!response.ok || data.success === false) {
+        throw new Error(data.message || data.error || `API error: ${response.status}`);
+      }
+      
+      return data;
+      
+    } catch (error) {
+      if (error.code === 'ECONNREFUSED') {
         throw new Error(
-          `Cannot connect to Dolphin Anty API at ${url}. ` +
-          'Make sure Dolphin Anty is running and the API is enabled.'
+          `Cannot connect to Dolphin Anty Local API at ${url}. ` +
+          'Make sure Dolphin Anty is running.'
         );
       }
       throw error;
@@ -133,12 +180,12 @@ export class DolphinAdapter extends EventEmitter {
   }
 
   /**
-   * List all available profiles
+   * List all available profiles (uses Cloud API)
    */
   async listProfiles() {
-    log.info('Fetching Dolphin profiles...');
+    log.info('Fetching Dolphin profiles from cloud...');
     
-    const response = await this._apiRequest('/v1.0/browser_profiles');
+    const response = await this._cloudApiRequest('/browser_profiles');
     
     const profiles = response.data || [];
     
@@ -148,31 +195,33 @@ export class DolphinAdapter extends EventEmitter {
       id: p.id,
       name: p.name,
       status: p.status,
-      notes: p.notes,
+      notes: p.notes?.content,
       tags: p.tags,
+      platform: p.platform,
+      browserType: p.browserType,
       createdAt: p.created_at,
       updatedAt: p.updated_at,
     }));
   }
 
   /**
-   * Get profile details
+   * Get profile details (uses Cloud API)
    */
   async getProfile(profileId) {
-    const response = await this._apiRequest(`/v1.0/browser_profiles/${profileId}`);
-    return response.data;
+    const response = await this._cloudApiRequest(`/browser_profiles/${profileId}`);
+    return response.data || response;
   }
 
   /**
-   * Start a profile via API and connect to it
+   * Start a profile via Local API and connect to it
    */
   async startProfile(profileId) {
-    log.info('Starting Dolphin profile via API', { profileId });
+    log.info('Starting Dolphin profile via Local API', { profileId });
     
     this.profileId = profileId;
     
-    // Start the profile
-    const response = await this._apiRequest(
+    // Start the profile using Local API
+    const response = await this._localApiRequest(
       `/v1.0/browser_profiles/${profileId}/start?automation=1`,
       'GET'
     );
@@ -185,7 +234,8 @@ export class DolphinAdapter extends EventEmitter {
     
     if (!automation || !automation.wsEndpoint) {
       throw new Error(
-        'No WebSocket endpoint returned. Make sure automation is enabled in Dolphin Anty settings.'
+        'No WebSocket endpoint returned. Make sure automation is enabled in Dolphin Anty settings. ' +
+        'Note: Automation requires a paid Dolphin Anty plan.'
       );
     }
     
@@ -265,7 +315,7 @@ export class DolphinAdapter extends EventEmitter {
   }
 
   /**
-   * Stop the profile via API
+   * Stop the profile via Local API
    */
   async stopProfile(profileId = null) {
     const id = profileId || this.profileId;
@@ -278,7 +328,7 @@ export class DolphinAdapter extends EventEmitter {
     log.info('Stopping Dolphin profile', { profileId: id });
     
     try {
-      await this._apiRequest(`/v1.0/browser_profiles/${id}/stop`, 'GET');
+      await this._localApiRequest(`/v1.0/browser_profiles/${id}/stop`, 'GET');
       log.info('Profile stopped');
     } catch (error) {
       log.warn('Failed to stop profile via API', { error: error.message });
@@ -367,8 +417,22 @@ export class DolphinAdapter extends EventEmitter {
    */
   async checkApiAvailable() {
     try {
-      await this._apiRequest('/v1.0/browser_profiles?limit=1');
+      await this._cloudApiRequest('/browser_profiles?limit=1');
       return true;
+    } catch (error) {
+      return false;
+    }
+  }
+
+  /**
+   * Check if Local API is available
+   */
+  async checkLocalApiAvailable() {
+    try {
+      const response = await fetch(`${this.localApiUrl}/v1.0/browser_profiles`, {
+        method: 'GET',
+      });
+      return response.ok || response.status === 401; // 401 means it's running but needs auth
     } catch (error) {
       return false;
     }
