@@ -617,6 +617,256 @@ program
 // Dolphin Anty Commands
 // ============================================================================
 
+// Dolphin interactive command
+program
+  .command('dolphin')
+  .description('Interactive Dolphin Anty browser warming')
+  .action(async () => {
+    showBanner();
+    
+    console.log(Color.bold(' Dolphin Anty Interactive Mode'));
+    console.log(UI.line('─', 50));
+    console.log();
+    
+    // Step 1: Get API token
+    console.log(Color.dim('Get your token from: https://dolphin-anty.com/panel/#/api'));
+    console.log();
+    
+    const token = await Prompt.input({
+      message: 'Paste your Dolphin API token',
+      validate: (val) => val.length > 20 || 'Token seems too short',
+    });
+    
+    console.log();
+    
+    // Step 2: Fetch profiles
+    const spinner = new Spinner().start('Fetching your profiles...');
+    
+    let profiles;
+    try {
+      const adapter = createDolphinAdapter({ token });
+      profiles = await adapter.listProfiles();
+      spinner.success(`Found ${profiles.length} profile(s)`);
+    } catch (error) {
+      spinner.fail('Failed to fetch profiles');
+      console.log(Color.red(`Error: ${error.message}`));
+      return;
+    }
+    
+    if (profiles.length === 0) {
+      console.log(Color.yellow('No profiles found. Create a profile in Dolphin Anty first.'));
+      return;
+    }
+    
+    console.log();
+    
+    // Step 3: Select profile
+    const profileChoices = profiles.map(p => ({
+      name: `${p.name} (ID: ${p.id})`,
+      value: p.id,
+    }));
+    
+    const selectedProfileId = await Prompt.select({
+      message: 'Select a profile to warm',
+      choices: profileChoices,
+    });
+    
+    const selectedProfile = profiles.find(p => p.id === selectedProfileId);
+    console.log();
+    console.log(Color.green(`${Symbols.success} Selected: ${selectedProfile.name}`));
+    console.log();
+    
+    // Step 4: Connection method
+    const connectionMethod = await Prompt.select({
+      message: 'How do you want to connect?',
+      choices: [
+        { name: 'Auto-launch via API (requires paid plan)', value: 'api' },
+        { name: 'Connect to running profile (manual start)', value: 'manual' },
+      ],
+    });
+    
+    let port = null;
+    if (connectionMethod === 'manual') {
+      console.log();
+      console.log(Color.yellow('Start the profile manually in Dolphin Anty first.'));
+      console.log(Color.dim('Look for the debug port in the profile details.'));
+      console.log();
+      
+      port = await Prompt.number({
+        message: 'Enter the debug port',
+        default: 9222,
+        min: 1000,
+        max: 65535,
+      });
+    }
+    
+    console.log();
+    
+    // Step 5: Load sites and configure session
+    await Sites.load();
+    const categories = Sites.getCategories();
+    
+    const sessionConfig = await Prompt.series({
+      categories: {
+        type: 'multiSelect',
+        message: 'Select site categories',
+        choices: [
+          { name: 'All Categories', value: 'all' },
+          ...categories.map(c => ({ 
+            name: `${c.name} (${c.count} sites)`, 
+            value: c.name 
+          })),
+        ],
+        default: ['all'],
+      },
+      
+      maxSites: {
+        type: 'number',
+        message: 'Maximum sites to visit (0 = unlimited)',
+        default: 20,
+        min: 0,
+      },
+      
+      searches: {
+        type: 'confirm',
+        message: 'Perform search engine warm-up?',
+        default: true,
+      },
+      
+      searchCount: {
+        type: 'number',
+        message: 'Number of searches',
+        default: 3,
+        min: 1,
+        max: 20,
+        when: (ans) => ans.searches,
+      },
+    });
+    
+    console.log();
+    
+    // Step 6: Confirm and run
+    console.log(Color.bold(' Session Summary'));
+    console.log(UI.line('─', 50));
+    
+    const sites = Sites.getSites(sessionConfig.categories, { maxSites: sessionConfig.maxSites, shuffle: false });
+    
+    const summary = [
+      ['Profile', selectedProfile.name],
+      ['Profile ID', selectedProfileId],
+      ['Connection', connectionMethod === 'api' ? 'Auto-launch' : `Manual (port ${port})`],
+      ['Sites', `${sites.length} sites`],
+      ['Searches', sessionConfig.searches ? sessionConfig.searchCount : 'Disabled'],
+    ];
+    console.log(UI.keyValue(summary, { indent: 1 }));
+    console.log();
+    
+    const confirm = await Prompt.confirm({ 
+      message: 'Start warming session?', 
+      default: true 
+    });
+    
+    if (!confirm) {
+      console.log(Color.yellow('Cancelled.'));
+      return;
+    }
+    
+    console.log();
+    
+    // Step 7: Load config and run
+    const overrides = {
+      sites: {
+        categories: sessionConfig.categories,
+        maxSites: sessionConfig.maxSites,
+      },
+      behavior: {
+        searches: sessionConfig.searches,
+        searchCount: sessionConfig.searchCount || 0,
+      },
+    };
+    
+    await Config.load({ overrides });
+    
+    // Create session
+    const session = createDolphinSession({
+      profileId: connectionMethod === 'api' ? selectedProfileId : null,
+      port: connectionMethod === 'manual' ? port : null,
+      token: token,
+    });
+    
+    // Progress tracking
+    let progressBar = null;
+    
+    session.on('initialized', () => {
+      console.log(Color.green(`${Symbols.success} Connected to Dolphin profile`));
+      console.log();
+    });
+    
+    session.on('started', ({ siteCount }) => {
+      console.log(Color.bold(' Progress'));
+      console.log(UI.line('─', 50));
+      progressBar = new ProgressBar({ total: siteCount, width: 40 });
+      progressBar.start();
+    });
+    
+    session.on('siteStart', ({ url, current }) => {
+      const shortUrl = url.length > 40 ? url.substring(0, 37) + '...' : url;
+      progressBar?.update(current - 1, shortUrl);
+    });
+    
+    session.on('siteComplete', ({ current }) => {
+      progressBar?.update(current);
+    });
+    
+    session.on('error', (error) => {
+      progressBar?.stop();
+      console.log();
+      console.log(Color.red(`${Symbols.error} Error: ${error.message}`));
+    });
+    
+    session.on('completed', (stats) => {
+      progressBar?.complete('Session complete!');
+      showStats(stats);
+    });
+    
+    session.on('stopped', (stats) => {
+      progressBar?.stop('Session stopped');
+      showStats(stats);
+    });
+    
+    // Handle Ctrl+C
+    let stopping = false;
+    process.on('SIGINT', async () => {
+      if (stopping) {
+        console.log('\nForce exit...');
+        process.exit(1);
+      }
+      stopping = true;
+      console.log('\n\nStopping session...');
+      await session.stop(false);
+      process.exit(0);
+    });
+    
+    // Run
+    try {
+      await session.initialize();
+      await session.start();
+    } catch (error) {
+      console.log(Color.red(`${Symbols.error} Error: ${error.message}`));
+      
+      if (error.message.includes('402') || error.message.includes('paid')) {
+        console.log();
+        console.log(Color.yellow('Tip: Automation requires a paid Dolphin Anty plan.'));
+        console.log(Color.yellow('Try the manual connection method instead:'));
+        console.log(Color.dim('  1. Start the profile manually in Dolphin Anty'));
+        console.log(Color.dim('  2. Run: node src/index.js dolphin'));
+        console.log(Color.dim('  3. Choose "Connect to running profile"'));
+      }
+      
+      process.exit(1);
+    }
+  });
+
 // Dolphin scan command
 program
   .command('dolphin:scan')
